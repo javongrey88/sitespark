@@ -1,23 +1,32 @@
 // pages/index.tsx
-import styles from "../styles/Home.module.css";
-import { useSession, signIn, signOut } from "next-auth/react";
-import { useState } from "react";
-import useSWR from "swr";
-import { Box, Button, Flex, Input, List, ListItem, Text } from "@chakra-ui/react";
-// … etc.
 
+import { useState } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
+import useSWR from "swr";
+import styles from "../styles/Home.module.css";
+
+type Preview = {
+  id: string;
+  title: string;
+  url: string;
+  createdAt: string;
+};
+
+const fetcher = (url: string) =>
+  fetch(url, { credentials: "include" }).then((r) => r.json() as Promise<Preview[]>);
 
 export default function Home() {
   const { data: session, status } = useSession();
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
-  const { data: previews, mutate } = useSWR(
+  const { data: previews, mutate } = useSWR<Preview[]>(
     session ? "/api/previews" : null,
-    (u) => fetch(u, { credentials: "include" }).then((r) => r.json())
+    fetcher
   );
 
   if (status === "loading") return <p>Loading…</p>;
-  if (!session)
+
+  if (!session) {
     return (
       <div className={styles.container}>
         <button className={styles.button} onClick={() => signIn("github")}>
@@ -25,18 +34,20 @@ export default function Home() {
         </button>
       </div>
     );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !url) return;
-    const newP = await fetch("/api/previews", {
+    const newPreview = await fetch("/api/previews", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ title, url }),
-    }).then((r) => r.json());
-    mutate([newP, ...(previews || [])], { revalidate: false });
-    setTitle(""); setUrl("");
+    }).then((r) => r.json() as Promise<Preview>);
+    mutate([newPreview, ...(previews ?? [])], { revalidate: false });
+    setTitle("");
+    setUrl("");
   };
 
   return (
@@ -51,23 +62,29 @@ export default function Home() {
       <form onSubmit={handleSubmit}>
         <input
           className={styles.formInput}
+          type="text"
           placeholder="Preview title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <input
           className={styles.formInput}
+          type="url"
           placeholder="Preview URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
-        <button className={styles.button} type="submit">Save Preview</button>
+        <button className={styles.button} type="submit">
+          Save Preview
+        </button>
       </form>
 
       <ul>
-        {previews?.map((p: any) => (
+        {previews?.map((p: Preview) => (
           <li key={p.id} className={styles.listItem}>
-            <a href={p.url} target="_blank" rel="noreferrer">{p.title}</a>
+            <a href={p.url} target="_blank" rel="noreferrer">
+              {p.title}
+            </a>
             <div className={styles.timestamp}>
               {new Date(p.createdAt).toLocaleString()}
             </div>
